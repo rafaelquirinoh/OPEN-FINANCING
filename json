@@ -1,0 +1,17 @@
+{
+  "name": "Open Financing",
+  "short_name": "OpenFin",
+  "description": "Organizador Financeiro Pessoal Profissional",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjM2I4MmY2IiBzdHJva2Utd2lkdGg9IjIiPjxyZWN0IHg9IjMiIHk9IjYiIHdpZHRoPSIxOCIgaGVpZ2h0PSIxMiIgcng9IjIiIC8+PHBhdGggZD0iTTcgMTRsMy0zIDIgMiA1LTUiIC8+PGNpcmNsZSBjeD0iMTciIGN5PSI5IiByPSIxIiBmaWxsPSIjM2I4MmY2Ii8+PC9zdmc+",
+      "sizes": "192x192",
+      "type": "image/svg+xml"
+    }
+  ]
+}
