@@ -1,779 +1,561 @@
-/* ==================================================
-   1. ESTADO E LOCALSTORAGE
-================================================== */
-const STORAGE_KEY = '@OpenFinancing:dados';
+// ====== BANCO DE DADOS LOCAL ======
+let transacoes = JSON.parse(localStorage.getItem('transacoes')) || [];
+let cartoes = JSON.parse(localStorage.getItem('cartoes')) || [];
+let metas = JSON.parse(localStorage.getItem('metas')) || [];
+let dashChartObj = null;
 
-let appState = {
-    transactions: [],
-    goals: [],
-    cards: [],
-    theme: 'light'
-};
+// Categorias
+const catReceitas = ["Salário", "Freelance", "Investimentos", "Rendimento", "Outros"];
+const catDespesas = ["Alimentação", "Transporte", "Moradia", "Lazer", "Compras", "Saúde", "Educação", "Outros"];
 
-// Formatação BRL
-const formatCurrency = (value) => {
-    return new Intl.NumberFormat('pt-BR', {
-        style: 'currency',
-        currency: 'BRL'
-    }).format(value);
-};
+const formatCurrency = (value) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 
-// Formatação Data (AAAA-MM-DD para DD/MM/AAAA)
-const formatDate = (dateString) => {
-    if(!dateString) return '';
-    const [year, month, day] = dateString.split('-');
-    return `${day}/${month}/${year}`;
-};
-
-// Formatação de Prazo Mês/Ano (AAAA-MM)
-const formatMonthYear = (dateString) => {
-    if(!dateString) return '-';
-    const [year, month] = dateString.split('-');
-    const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-    return `${months[parseInt(month)-1]}/${year}`;
-};
-
-const loadData = () => {
-    const data = localStorage.getItem(STORAGE_KEY);
-    if (data) {
-        appState = JSON.parse(data);
-        // Migração caso cards antigos não tenham propriedade used/available
-        appState.cards.forEach(c => {
-            if(c.used === undefined) c.used = 0;
-        });
-        // Migração para histórico em metas antigas
-        appState.goals.forEach(g => {
-            if(!g.history) g.history = [];
-        });
+window.onload = () => {
+    // Aplicar Tema
+    const isDark = localStorage.getItem('theme') === 'dark';
+    if(isDark) {
+        document.body.classList.add('dark-mode');
+        document.getElementById('btn-theme').innerText = '☀️';
     }
-    applyTheme(appState.theme);
-    populateCategories();
+    
+    preencherAnosFiltro();
+    renderAll();
 };
 
-const saveData = () => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
-    updateUI(); 
-};
+function toggleTheme() {
+    const isDark = document.body.classList.toggle('dark-mode');
+    document.getElementById('btn-theme').innerText = isDark ? '☀️' : '🌙';
+    localStorage.setItem('theme', isDark ? 'dark' : 'light');
+    renderDashboard(); 
+}
 
-/* ==================================================
-   2. CATEGORIAS PADRÃO
-================================================== */
-const categories = {
-    receita: ['Salário', 'Investimentos', 'Freelance', 'Bônus', 'Outros'],
-    despesa: ['Alimentação', 'Transporte', 'Moradia', 'Saúde', 'Educação', 'Lazer', 'Compras', 'Assinaturas', 'Contas', 'Outros']
-};
+function showSection(sectionId, element = null) {
+    document.querySelectorAll('.page-section').forEach(sec => sec.classList.remove('active'));
+    document.getElementById(sectionId).classList.add('active');
+    
+    // Titulo Topo
+    let titulos = { 'dashboard': 'Dashboard', 'receitas': 'Receitas', 'despesas': 'Despesas', 'cartoes': 'Cartões de Crédito', 'metas': 'Metas Cofrinhos', 'configuracoes': 'Configurações' };
+    document.getElementById('page-title').innerText = titulos[sectionId];
+    
+    // Classe ativa no menu
+    if(element) {
+        document.querySelectorAll('#menu-list a').forEach(a => a.classList.remove('active'));
+        element.classList.add('active');
+    }
+    renderAll();
+}
 
-const populateCategories = () => {
-    const select = document.getElementById('transCategory');
-    if(!select) return;
-    const type = document.getElementById('transType').value;
-    select.innerHTML = '';
-    const list = categories[type] || categories['despesa'];
-    list.forEach(cat => {
-        select.innerHTML += `<option value="${cat}">${cat}</option>`;
-    });
-};
+// ====== GERENCIAMENTO DE MODAIS ======
+function openModal(id) { 
+    document.getElementById(id).classList.add('active'); 
+}
 
-/* ==================================================
-   3. NAVEGAÇÃO, TEMA E RESPONSIVIDADE
-================================================== */
-const setupNavigation = () => {
-    const navItems = document.querySelectorAll('.nav-item');
-    const views = document.querySelectorAll('.view');
-    const pageTitle = document.getElementById('pageTitle');
-    const sidebar = document.getElementById('sidebar');
+function closeModal(id) { 
+    document.getElementById(id).classList.remove('active');
+    if(id === 'modal-transacao') document.getElementById('form-transacao').reset();
+    if(id === 'modal-cartao') {
+        document.getElementById('form-cartao').reset();
+        document.getElementById('cartao-id').value = '';
+        document.getElementById('titulo-modal-cartao').innerText = 'Novo Cartão';
+    }
+    if(id === 'modal-meta') {
+        document.getElementById('form-meta').reset();
+        document.getElementById('meta-id').value = '';
+        document.getElementById('titulo-modal-meta').innerText = 'Novo Cofrinho';
+    }
+    if(id === 'modal-mov-meta') {
+        document.getElementById('form-mov-meta').reset();
+    }
+}
 
-    navItems.forEach(item => {
-        item.addEventListener('click', (e) => {
-            navItems.forEach(nav => nav.classList.remove('active'));
-            views.forEach(v => v.classList.remove('active'));
-            
-            const btn = e.currentTarget;
-            btn.classList.add('active');
-            const targetView = btn.getAttribute('data-target');
-            document.getElementById(targetView).classList.add('active');
-            
-            // Título limpo
-            pageTitle.textContent = btn.textContent.replace(/[^\w\sÀ-ÿ]/g, '').trim();
-            sidebar.classList.remove('open');
-        });
-    });
+function openModalCartao() {
+    document.getElementById('form-cartao').reset();
+    document.getElementById('cartao-id').value = '';
+    document.getElementById('titulo-modal-cartao').innerText = "Novo Cartão";
+    openModal('modal-cartao');
+}
 
-    document.getElementById('menuToggle').addEventListener('click', () => {
-        sidebar.classList.add('open');
-    });
+function openModalMeta() {
+    document.getElementById('form-meta').reset();
+    document.getElementById('meta-id').value = '';
+    document.getElementById('titulo-modal-meta').innerText = "Novo Cofrinho";
+    openModal('modal-meta');
+}
 
-    document.getElementById('closeMenuBtn').addEventListener('click', () => {
-        sidebar.classList.remove('open');
-    });
-};
+function openModalTransacao(tipo) {
+    document.getElementById('transacao-id').value = '';
+    document.getElementById('transacao-tipo').value = tipo;
+    
+    const selectCat = document.getElementById('transacao-cat');
+    selectCat.innerHTML = '';
+    const categorias = tipo === 'receita' ? catReceitas : catDespesas;
+    categorias.forEach(c => selectCat.innerHTML += `<option value="${c}">${c}</option>`);
 
-const applyTheme = (theme) => {
-    const html = document.documentElement;
-    const themeBtn = document.getElementById('themeToggle');
-    if (theme === 'dark') {
-        html.setAttribute('data-theme', 'dark');
-        themeBtn.textContent = '☀️';
+    const divPagamento = document.getElementById('div-pagamento');
+    if(tipo === 'despesa') {
+        divPagamento.style.display = 'block';
+        const selectPag = document.getElementById('transacao-pagamento');
+        selectPag.innerHTML = `<option value="Dinheiro/Pix">Dinheiro / Pix</option>`;
+        cartoes.forEach(c => selectPag.innerHTML += `<option value="${c.banco}">${c.banco} (Cartão)</option>`);
     } else {
-        html.removeAttribute('data-theme');
-        themeBtn.textContent = '🌙';
-    }
-    appState.theme = theme;
-};
-
-document.getElementById('themeToggle').addEventListener('click', () => {
-    const newTheme = appState.theme === 'light' ? 'dark' : 'light';
-    applyTheme(newTheme);
-    saveData();
-});
-
-/* ==================================================
-   4. CÁLCULOS E DASHBOARD
-================================================== */
-const getFilteredTransactions = () => {
-    const filter = document.getElementById('periodFilter').value;
-    const now = new Date();
-    
-    return appState.transactions.filter(t => {
-        const tDate = new Date(t.date);
-        if (filter === 'month') {
-            return tDate.getMonth() === now.getMonth() && tDate.getFullYear() === now.getFullYear();
-        } else if (filter === 'year') {
-            return tDate.getFullYear() === now.getFullYear();
-        }
-        return true;
-    });
-};
-
-const updateDashboard = () => {
-    const filteredT = getFilteredTransactions();
-    
-    let totalReceitas = 0;
-    let totalDespesas = 0;
-    
-    // Cálculo Dinheiro
-    filteredT.forEach(t => {
-        if (t.type === 'receita') totalReceitas += Number(t.value);
-        if (t.type === 'despesa') totalDespesas += Number(t.value);
-    });
-
-    const saldo = totalReceitas - totalDespesas;
-    
-    let economiaTotal = 0;
-    appState.goals.forEach(g => economiaTotal += Number(g.current));
-    
-    let cartoesUtilizados = 0;
-    appState.cards.forEach(c => cartoesUtilizados += Number(c.used));
-
-    document.getElementById('dashReceitas').textContent = formatCurrency(totalReceitas);
-    document.getElementById('dashDespesas').textContent = formatCurrency(totalDespesas);
-    document.getElementById('dashSaldo').textContent = formatCurrency(saldo);
-    document.getElementById('dashEconomia').textContent = formatCurrency(economiaTotal);
-    document.getElementById('dashCartoes').textContent = formatCurrency(cartoesUtilizados);
-
-    renderCharts(totalReceitas, totalDespesas, filteredT);
-    renderInsights(totalReceitas, totalDespesas, saldo);
-    renderRecentTransactions(filteredT);
-};
-
-const renderCharts = (rec, desp, transactions) => {
-    // Gráfico Vertical (Rec x Desp)
-    const maxVal = Math.max(rec, desp, 1);
-    const recPerc = (rec / maxVal) * 100;
-    const despPerc = (desp / maxVal) * 100;
-    
-    document.getElementById('chartRecFill').style.height = `${recPerc}%`;
-    document.getElementById('chartDespFill').style.height = `${despPerc}%`;
-
-    // Gráfico Horizontal (Categorias)
-    const cats = {};
-    transactions.filter(t => t.type === 'despesa').forEach(t => {
-        cats[t.category] = (cats[t.category] || 0) + t.value;
-    });
-    
-    const sortedCats = Object.entries(cats).sort((a,b) => b[1] - a[1]).slice(0, 4);
-    const catContainer = document.getElementById('categoryChart');
-    catContainer.innerHTML = '';
-    
-    if(sortedCats.length === 0) {
-        catContainer.innerHTML = '<p style="color:var(--text-muted); font-size:0.9rem">Sem gastos no período.</p>';
-        return;
+        divPagamento.style.display = 'none';
     }
 
-    const maxCat = sortedCats[0][1];
-    sortedCats.forEach(([catName, val]) => {
-        const perc = (val / maxCat) * 100;
-        catContainer.innerHTML += `
-            <div class="h-bar-item">
-                <div class="h-bar-header">
-                    <span>${catName}</span>
-                    <strong>${formatCurrency(val)}</strong>
-                </div>
-                <div class="h-bar-bg">
-                    <div class="h-bar-fill" style="width: ${perc}%"></div>
-                </div>
-            </div>
-        `;
-    });
-};
+    document.getElementById('titulo-modal-transacao').innerText = tipo === 'receita' ? "Nova Receita" : "Nova Despesa";
+    openModal('modal-transacao');
+}
 
-const renderInsights = (rec, desp, saldo) => {
-    const list = document.getElementById('insightsList');
-    list.innerHTML = '';
-    let insights = [];
-    
-    if (saldo > 0) insights.push(`🎉 Você está operando no azul com sobra de ${formatCurrency(saldo)}.`);
-    else if (saldo < 0) insights.push(`⚠️ Suas despesas superaram as receitas em ${formatCurrency(Math.abs(saldo))}.`);
-    
-    appState.goals.forEach(g => {
-        const perc = ((g.current / g.target) * 100);
-        if (perc >= 80 && perc < 100) insights.push(`🎯 O cofrinho "${g.name}" está ${perc.toFixed(1)}% concluído!`);
-    });
-    
-    appState.cards.forEach(c => {
-        const p = (c.used / c.limit) * 100;
-        if(p > 80) insights.push(`💳 Atenção: O cartão ${c.name} atingiu ${p.toFixed(0)}% do limite.`);
-    });
-
-    if (insights.length === 0) insights.push(`Continue registrando suas movimentações para gerar insights.`);
-
-    insights.slice(0, 3).forEach(text => {
-        const icon = text.includes('⚠️') ? 'var(--color-yellow)' : (text.includes('💳') ? 'var(--color-red)' : 'var(--color-blue)');
-        list.innerHTML += `<div class="insight-item" style="border-left-color: ${icon}"><span>${text}</span></div>`;
-    });
-};
-
-const renderRecentTransactions = (transactions) => {
-    const list = document.getElementById('recentTransactions');
-    list.innerHTML = '';
-    const sorted = [...transactions].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 4);
-    
-    if(sorted.length === 0) {
-        list.innerHTML = `<p style="color:var(--text-muted); font-size:0.9rem">Nenhuma movimentação.</p>`;
-        return;
-    }
-
-    sorted.forEach(t => {
-        const isRec = t.type === 'receita';
-        list.innerHTML += `
-            <div class="transaction-item" style="border-left-color: var(${isRec ? '--color-green' : '--color-red'})">
-                <div>
-                    <strong>${t.desc}</strong><br>
-                    <small style="color:var(--text-muted)">${formatDate(t.date)}</small>
-                </div>
-                <strong class="${isRec ? 'text-green' : 'text-red'}">
-                    ${isRec ? '+' : '-'} ${formatCurrency(t.value)}
-                </strong>
-            </div>
-        `;
-    });
-};
-
-/* ==================================================
-   5. LÓGICA DOS CARTÕES DE CRÉDITO (REGRAS 4, 5, 6, 7)
-================================================== */
-const calculateCardLimits = () => {
-    // Zera o uso
-    appState.cards.forEach(c => c.used = 0);
-    
-    // Soma todas as despesas vinculadas a cartões
-    appState.transactions.forEach(t => {
-        if (t.type === 'despesa' && t.payment === 'cartao' && t.cardId) {
-            const card = appState.cards.find(c => c.id === parseInt(t.cardId));
-            if (card) {
-                // Se for parcelado, soma o valor total (limitando o limite)
-                // O t.value já é o valor total da compra registrado no form
-                card.used += Number(t.value);
-            }
-        }
-    });
-};
-
-const renderCards = () => {
-    const grid = document.getElementById('cardsGrid');
-    grid.innerHTML = '';
-    
-    const cardSelect = document.getElementById('transCard');
-    cardSelect.innerHTML = '';
-
-    if (appState.cards.length === 0) {
-        grid.innerHTML = `<p style="color:var(--text-muted)">Nenhum cartão cadastrado.</p>`;
-        cardSelect.innerHTML = `<option value="">Cadastre um cartão primeiro</option>`;
-        return;
-    }
-
-    appState.cards.forEach(c => {
-        const available = c.limit - c.used;
-        const perc = (c.used / c.limit) * 100;
-        
-        // Popula Options no Select do Modal de Despesa
-        cardSelect.innerHTML += `<option value="${c.id}">${c.name} (Disp: ${formatCurrency(available)})</option>`;
-
-        // Renderiza UI do Cartão
-        grid.innerHTML += `
-            <div class="credit-card-ui">
-                <button class="card-actions-btn" onclick="deleteCard(${c.id})" title="Excluir Cartão">🗑️</button>
-                <div class="card-bank">${c.bank}</div>
-                <div class="card-name">${c.name}</div>
-                <div class="card-limits">
-                    <div class="limit-row total">
-                        <span>Limite Total</span>
-                        <span>${formatCurrency(c.limit)}</span>
-                    </div>
-                    <div class="limit-row used">
-                        <span>Utilizado (Fatura)</span>
-                        <span>${formatCurrency(c.used)}</span>
-                    </div>
-                    <div class="progress-bar-bg" style="height: 4px; background: rgba(255,255,255,0.2); margin: 4px 0;">
-                        <div class="progress-bar-fill ${perc > 90 ? 'bg-red' : 'bg-green'}" style="width: ${perc > 100 ? 100 : perc}%"></div>
-                    </div>
-                    <div class="limit-row avail">
-                        <span>Disponível</span>
-                        <span>${formatCurrency(available)}</span>
-                    </div>
-                </div>
-                <div class="card-dates">
-                    <span>Fechamento: Dia ${c.closeDay}</span>
-                    <span>Vencimento: Dia ${c.dueDay}</span>
-                </div>
-            </div>
-        `;
-    });
-};
-
-const deleteCard = (id) => {
-    // Verifica se há despesas vinculadas
-    const hasExpenses = appState.transactions.some(t => t.payment === 'cartao' && parseInt(t.cardId) === id);
-    if(hasExpenses) {
-        alert("Não é possível excluir um cartão que possui despesas vinculadas. Apague as despesas primeiro.");
-        return;
-    }
-    
-    if(confirm('Tem certeza que deseja remover este cartão?')) {
-        appState.cards = appState.cards.filter(c => c.id !== id);
-        saveData();
-        showToast('Cartão removido!');
-    }
-};
-
-// Form: Cadastrar Cartão (CORREÇÃO URGENTE REGRA 2 & 3)
-document.getElementById('cardForm').addEventListener('submit', (e) => {
+// ====== SALVAR E GERENCIAR TRANSAÇÕES ======
+function salvarTransacao(e) {
     e.preventDefault();
-    const name = document.getElementById('cardName').value;
-    const bank = document.getElementById('cardBank').value;
-    const limit = parseFloat(document.getElementById('cardLimit').value);
-    const closeDay = document.getElementById('cardClose').value;
-    const dueDay = document.getElementById('cardDue').value;
+    const id = document.getElementById('transacao-id').value;
+    const tipo = document.getElementById('transacao-tipo').value;
+    const desc = document.getElementById('transacao-desc').value;
+    const valor = parseFloat(document.getElementById('transacao-valor').value);
+    const cat = document.getElementById('transacao-cat').value;
+    const data = document.getElementById('transacao-data').value;
+    const pagamento = tipo === 'despesa' ? document.getElementById('transacao-pagamento').value : 'N/A';
 
-    appState.cards.push({
-        id: Date.now(),
-        name, bank, limit, used: 0, closeDay, dueDay
-    });
-
-    saveData();
-    closeModal('cardModal');
-    e.target.reset();
-    showToast('Cartão cadastrado com sucesso!');
-});
-
-
-/* ==================================================
-   6. TRANSAÇÕES E LIGAÇÃO COM CARTÃO
-================================================== */
-const toggleCardSelect = () => {
-    const payment = document.getElementById('transPayment').value;
-    const cardGroup = document.getElementById('cardSelectGroup');
-    const instGroup = document.getElementById('installmentsGroup');
-    
-    if(payment === 'cartao') {
-        cardGroup.style.display = 'flex';
-        instGroup.style.display = 'flex';
+    if (id) {
+        const index = transacoes.findIndex(t => t.id == id);
+        transacoes[index] = { id: parseFloat(id), tipo, desc, valor, cat, data, pagamento };
     } else {
-        cardGroup.style.display = 'none';
-        instGroup.style.display = 'none';
-    }
-};
-
-const renderTransactionsTables = () => {
-    const recTable = document.querySelector('#receitasTable tbody');
-    const despTable = document.querySelector('#despesasTable tbody');
-    
-    recTable.innerHTML = '';
-    despTable.innerHTML = '';
-
-    const sorted = [...appState.transactions].sort((a,b) => new Date(b.date) - new Date(a.date));
-
-    sorted.forEach(t => {
-        const tr = document.createElement('tr');
-        
-        let paymentInfo = '';
-        if(t.type === 'despesa') {
-            if(t.payment === 'cartao') {
-                const c = appState.cards.find(card => card.id === parseInt(t.cardId));
-                paymentInfo = `<span class="text-blue">💳 ${c ? c.name : 'Cartão Excluído'} ${t.installments > 1 ? `(${t.installments}x)` : ''}</span>`;
-            } else {
-                paymentInfo = `<span>💵 Dinheiro/Conta</span>`;
-            }
-        }
-
-        if(t.type === 'receita') {
-            tr.innerHTML = `
-                <td>${formatDate(t.date)}</td>
-                <td>${t.desc}</td>
-                <td><span class="badge receita">${t.category}</span></td>
-                <td class="text-green font-bold">+ ${formatCurrency(t.value)}</td>
-                <td><button class="btn-secondary" style="padding: 6px" onclick="deleteTransaction(${t.id})">🗑️</button></td>
-            `;
-            recTable.appendChild(tr);
-        } else {
-            tr.innerHTML = `
-                <td>${formatDate(t.date)}</td>
-                <td>${t.desc}</td>
-                <td><span class="badge despesa">${t.category}</span></td>
-                <td>${paymentInfo}</td>
-                <td class="text-red font-bold">- ${formatCurrency(t.value)}</td>
-                <td><button class="btn-secondary" style="padding: 6px" onclick="deleteTransaction(${t.id})">🗑️</button></td>
-            `;
-            despTable.appendChild(tr);
-        }
-    });
-};
-
-document.getElementById('transactionForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const type = document.getElementById('transType').value;
-    const desc = document.getElementById('transDesc').value;
-    const value = parseFloat(document.getElementById('transValue').value);
-    const date = document.getElementById('transDate').value;
-    const category = document.getElementById('transCategory').value;
-    
-    const obj = { id: Date.now(), type, desc, value, date, category };
-
-    if(type === 'despesa') {
-        const payment = document.getElementById('transPayment').value;
-        obj.payment = payment;
-        if(payment === 'cartao') {
-            const cardId = document.getElementById('transCard').value;
-            if(!cardId) {
-                alert("Por favor, cadastre um cartão primeiro.");
-                return;
-            }
-            obj.cardId = cardId;
-            obj.installments = parseInt(document.getElementById('transInstallments').value) || 1;
-        }
+        transacoes.push({ id: Date.now(), tipo, desc, valor, cat, data, pagamento });
     }
 
-    appState.transactions.push(obj);
-    saveData();
-    closeModal('transactionModal');
-    e.target.reset();
-    showToast(`${type === 'receita' ? 'Receita' : 'Despesa'} salva!`);
-});
+    localStorage.setItem('transacoes', JSON.stringify(transacoes));
+    closeModal('modal-transacao');
+    preencherAnosFiltro();
+    renderAll();
+}
 
-const deleteTransaction = (id) => {
-    if(confirm("Excluir esta transação?")) {
-        appState.transactions = appState.transactions.filter(t => t.id !== id);
-        saveData(); // Recalcula limites automaticamente
-        showToast('Transação excluída e limites recalculados.');
+function excluirTransacao(id) {
+    if(confirm("Excluir lançamento?")) {
+        transacoes = transacoes.filter(t => t.id !== id);
+        localStorage.setItem('transacoes', JSON.stringify(transacoes));
+        renderAll();
     }
-};
+}
 
-/* ==================================================
-   7. METAS & COFRINHOS DIGITAIS (REGRAS 11 A 20)
-================================================== */
-const renderGoals = () => {
-    const grid = document.getElementById('goalsGrid');
-    grid.innerHTML = '';
+// ====== DASHBOARD: FILTROS E LÓGICA ======
+function preencherAnosFiltro() {
+    const anos = [...new Set(transacoes.map(t => t.data.split('-')[0]))].sort((a,b) => b - a);
+    const selAno = document.getElementById('dash-filtro-ano');
+    let options = '<option value="">Ano (Todos)</option>';
+    anos.forEach(ano => options += `<option value="${ano}">${ano}</option>`);
+    if(selAno) selAno.innerHTML = options;
+}
 
-    if (appState.goals.length === 0) {
-        grid.innerHTML = `<p style="color:var(--text-muted)">Nenhum cofrinho criado.</p>`;
-        return;
-    }
+function limparFiltroDash() {
+    document.getElementById('dash-filtro-data').value = '';
+    document.getElementById('dash-filtro-mes').value = '';
+    document.getElementById('dash-filtro-ano').value = '';
+    renderDashboard();
+}
 
-    appState.goals.forEach(g => {
-        let percentage = (g.current / g.target) * 100;
-        if (percentage > 100) percentage = 100;
-        
-        let status = 'Em andamento';
-        let statusColor = 'var(--color-purple)';
-        
-        // Regra de Status baseada em Prazo
-        if (percentage === 100) {
-            status = 'Concluída';
-            statusColor = 'var(--color-green)';
-            if(g.status !== 'Concluída') {
-                showToast(`🎉 META CONCLUÍDA: ${g.name}!`);
-            }
-        } else if (g.deadline) {
-            const today = new Date();
-            const dead = new Date(g.deadline + '-01'); // Adiciona dia 01 para parsear mes/ano
-            const diffTime = dead - today;
-            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-            
-            if(diffDays < 0) {
-                status = 'Atrasada';
-                statusColor = 'var(--color-red)';
-            } else if(diffDays <= 30) {
-                status = 'Próxima do prazo';
-                statusColor = 'var(--color-yellow)';
-            }
-        }
-        
-        g.status = status; // Atualiza status real no objeto
+function getTransacoesFiltradasDash() {
+    let dados = [...transacoes];
+    const fData = document.getElementById('dash-filtro-data').value;
+    const fMes = document.getElementById('dash-filtro-mes').value;
+    const fAno = document.getElementById('dash-filtro-ano').value;
 
-        const [icon, ...typeText] = g.type.split(' ');
+    if(fData) dados = dados.filter(t => t.data === fData);
+    if(fMes) dados = dados.filter(t => t.data.split('-')[1] === fMes);
+    if(fAno) dados = dados.filter(t => t.data.split('-')[0] === fAno);
 
-        grid.innerHTML += `
-            <div class="goal-card" onclick="openGoalDetail(${g.id})">
-                <div class="goal-header">
-                    <div class="goal-title-group">
-                        <span class="goal-icon">${icon}</span>
-                        <div>
-                            <h3 style="font-size:1.1rem">${g.name}</h3>
-                            <small style="color:var(--text-muted)">${typeText.join(' ')}</small>
-                        </div>
-                    </div>
-                    <span class="goal-status" style="color: ${statusColor}; border: 1px solid ${statusColor}">
-                        ${status}
-                    </span>
-                </div>
-                
-                <p style="font-size:1.4rem; font-weight:700; margin-top:10px;">
-                    ${formatCurrency(g.current)} 
-                    <span style="font-size:0.8rem; font-weight:400; color:var(--text-muted)">guardados de ${formatCurrency(g.target)}</span>
-                </p>
-                
-                <div class="progress-container">
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar-fill" style="width: ${percentage}%; background-color: ${statusColor}"></div>
-                    </div>
-                    <div class="progress-stats">
-                        <span>${percentage.toFixed(1)}% concluído</span>
-                        <span>Faltam ${formatCurrency(g.target - g.current < 0 ? 0 : g.target - g.current)}</span>
-                    </div>
-                </div>
-                <div class="goal-footer">
-                    <span>Prazo: ${formatMonthYear(g.deadline)}</span>
-                    <span class="text-blue" style="font-weight:600">Ver Detalhes →</span>
-                </div>
-            </div>
-        `;
-    });
-};
+    return dados;
+}
 
-document.getElementById('goalForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const type = document.getElementById('goalType').value;
-    const name = document.getElementById('goalName').value;
-    const target = parseFloat(document.getElementById('goalTarget').value);
-    const deadline = document.getElementById('goalDeadline').value;
+// ====== RENDERIZAÇÕES ======
+function renderAll() {
+    renderDashboard();
+    renderTabelas('receita');
+    renderTabelas('despesa');
+    renderCartoes();
+    renderMetas();
+}
 
-    appState.goals.push({
-        id: Date.now(),
-        type, name, target, current: 0, deadline, status: 'Em andamento', history: []
-    });
-
-    saveData();
-    closeModal('goalModal');
-    e.target.reset();
-    showToast('Cofrinho criado!');
-});
-
-/* Modal Detalhes da Meta (Regras 16, 17, 18, 19) */
-let currentGoalView = null;
-
-const openGoalDetail = (id) => {
-    const goal = appState.goals.find(g => g.id === id);
-    if(!goal) return;
-    currentGoalView = goal.id;
-
-    document.getElementById('detailGoalName').textContent = `${goal.type.split(' ')[0]} ${goal.name}`;
-    document.getElementById('detailGoalTarget').textContent = formatCurrency(goal.target);
-    document.getElementById('detailGoalCurrent').textContent = formatCurrency(goal.current);
+function renderDashboard() {
+    const dados = getTransacoesFiltradasDash();
     
-    const remaining = goal.target - goal.current;
-    document.getElementById('detailGoalRemaining').textContent = formatCurrency(remaining < 0 ? 0 : remaining);
-    
-    let perc = (goal.current / goal.target) * 100;
-    if(perc > 100) perc = 100;
-    
-    const bar = document.getElementById('detailGoalBar');
-    bar.style.width = `${perc}%`;
-    bar.style.backgroundColor = perc === 100 ? 'var(--color-green)' : 'var(--color-purple)';
-    
-    document.getElementById('detailGoalPerc').textContent = `${perc.toFixed(1)}% Concluído`;
-    document.getElementById('detailGoalDeadlineInfo').textContent = `Prazo: ${formatMonthYear(goal.deadline)}`;
-    
-    const statusEl = document.getElementById('detailGoalStatus');
-    statusEl.textContent = goal.status;
-    statusEl.style.color = perc === 100 ? 'var(--color-green)' : (goal.status === 'Atrasada' ? 'var(--color-red)' : 'var(--color-purple)');
+    const totalRec = dados.filter(t => t.tipo === 'receita').reduce((a, t) => a + t.valor, 0);
+    const totalDesp = dados.filter(t => t.tipo === 'despesa').reduce((a, t) => a + t.valor, 0);
+    const faturas = dados.filter(t => t.tipo === 'despesa' && t.pagamento !== 'Dinheiro/Pix').reduce((a, t) => a + t.valor, 0);
+    const economia = metas.reduce((a, m) => a + m.guardado, 0);
 
-    // Cálculo Mensal Necessário
-    const monthlyBox = document.getElementById('detailGoalMonthly');
-    if (perc === 100) {
-        monthlyBox.innerHTML = `🎉 Você atingiu o alvo! Parabéns!`;
-        monthlyBox.style.color = 'var(--color-green)';
-    } else if (goal.deadline) {
-        const today = new Date();
-        const dead = new Date(goal.deadline + '-01');
-        let diffMonths = (dead.getFullYear() - today.getFullYear()) * 12 + (dead.getMonth() - today.getMonth());
-        
-        if (diffMonths <= 0) diffMonths = 1; // Evita divisão por zero
-        const monthlyNeeded = remaining / diffMonths;
-        
-        monthlyBox.innerHTML = `💡 Para atingir o alvo no prazo, você precisa guardar <strong>${formatCurrency(monthlyNeeded)}</strong> por mês.`;
-        monthlyBox.style.color = 'var(--color-blue)';
-    }
+    document.getElementById('dash-receitas').innerText = formatCurrency(totalRec);
+    document.getElementById('dash-despesas').innerText = formatCurrency(totalDesp);
+    document.getElementById('dash-saldo').innerText = formatCurrency(totalRec - totalDesp);
+    document.getElementById('dash-faturas').innerText = formatCurrency(faturas);
+    document.getElementById('dash-economia').innerText = formatCurrency(economia);
 
-    // Histórico
-    const histContainer = document.getElementById('detailGoalHistory');
-    histContainer.innerHTML = '';
-    if(!goal.history || goal.history.length === 0) {
-        histContainer.innerHTML = '<p style="color:var(--text-muted); padding:10px">Nenhuma movimentação registrada.</p>';
+    // Insight
+    const tx = document.getElementById('insight-text');
+    if(totalDesp > totalRec && totalRec > 0) {
+        tx.innerText = "Alerta: Suas despesas estão superando suas receitas neste período!";
+        tx.style.borderLeftColor = "var(--red)";
+    } else if (economia > 0 && totalRec > 0) {
+        tx.innerText = "Ótimo trabalho! Você está mantendo o foco nas suas metas.";
+        tx.style.borderLeftColor = "var(--green)";
     } else {
-        const sortedHist = [...goal.history].sort((a,b) => new Date(b.date) - new Date(a.date));
-        sortedHist.forEach(h => {
-            const isAdd = h.type === 'add';
-            histContainer.innerHTML += `
-                <div class="history-item">
-                    <div>
-                        <strong>${isAdd ? 'Depósito' : 'Retirada'}</strong> ${h.obs ? `- ${h.obs}` : ''}<br>
-                        <small style="color:var(--text-muted)">${formatDate(h.date)}</small>
-                    </div>
-                    <strong class="${isAdd ? 'text-green' : 'text-red'}">
-                        ${isAdd ? '+' : '-'} ${formatCurrency(h.value)}
-                    </strong>
-                </div>
-            `;
-        });
+        tx.innerText = "Continue registrando suas movimentações para gerar insights precisos.";
+        tx.style.borderLeftColor = "var(--primary)";
     }
 
-    // Ações botões no detalhe
-    document.getElementById('btnAddFundBtn').onclick = () => { closeModal('goalDetailModal'); openFundModal(goal.id, 'add'); };
-    document.getElementById('btnRemoveFundBtn').onclick = () => { closeModal('goalDetailModal'); openFundModal(goal.id, 'remove'); };
-    document.getElementById('btnDeleteGoalBtn').onclick = () => {
-        if(confirm('Excluir este cofrinho permanentemente?')) {
-            appState.goals = appState.goals.filter(g => g.id !== goal.id);
-            saveData();
-            closeModal('goalDetailModal');
-            showToast('Cofrinho excluído.');
-        }
-    };
+    // Listas Top Gastos
+    const despesasSort = dados.filter(t => t.tipo === 'despesa').sort((a,b) => b.valor - a.valor).slice(0, 4);
+    const divGastos = document.getElementById('lista-top-gastos');
+    if(despesasSort.length === 0) divGastos.innerHTML = "Sem gastos no período.";
+    else {
+        divGastos.innerHTML = despesasSort.map(d => `
+            <div class="list-item">
+                <div class="list-item-info"><strong>${d.desc}</strong><span>${d.cat} • ${d.data.split('-').reverse().join('/')}</span></div>
+                <div class="list-item-value text-red">${formatCurrency(d.valor)}</div>
+            </div>
+        `).join('');
+    }
 
-    openModal('goalDetailModal');
-};
+    // Últimas Movimentações
+    const ultimas = [...dados].sort((a,b) => new Date(b.data) - new Date(a.data)).slice(0, 5);
+    const divUltimas = document.getElementById('lista-ultimas-mov');
+    if(ultimas.length === 0) divUltimas.innerHTML = "Nenhuma movimentação.";
+    else {
+        divUltimas.innerHTML = ultimas.map(u => `
+            <div class="list-item">
+                <div class="list-item-info"><strong>${u.desc}</strong><span>${u.cat}</span></div>
+                <div class="list-item-value ${u.tipo === 'receita' ? 'text-green' : 'text-red'}">${u.tipo === 'receita' ? '+' : '-'}${formatCurrency(u.valor)}</div>
+            </div>
+        `).join('');
+    }
 
-const openFundModal = (goalId, type) => {
-    document.getElementById('fundGoalId').value = goalId;
-    document.getElementById('fundActionType').value = type;
-    document.getElementById('fundModalTitle').textContent = type === 'add' ? 'Adicionar Dinheiro' : 'Retirar Dinheiro';
-    document.getElementById('fundDate').value = new Date().toISOString().split('T')[0];
-    openModal('goalFundModal');
-};
+    renderChartBar(totalRec, totalDesp);
+}
 
-document.getElementById('goalFundForm').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const id = parseInt(document.getElementById('fundGoalId').value);
-    const type = document.getElementById('fundActionType').value;
-    const value = parseFloat(document.getElementById('fundValue').value);
-    const date = document.getElementById('fundDate').value;
-    const obs = document.getElementById('fundObs').value;
+function renderChartBar(rec, desp) {
+    const ctx = document.getElementById('dashBarChart').getContext('2d');
+    if(dashChartObj) dashChartObj.destroy();
+    
+    const style = getComputedStyle(document.body);
+    const colorText = style.getPropertyValue('--text-muted').trim();
+    const colorRec = style.getPropertyValue('--green').trim() || '#05CD99';
+    const colorDesp = style.getPropertyValue('--red').trim() || '#EE5D50';
 
-    const goal = appState.goals.find(g => g.id === id);
-    if(goal) {
-        if(type === 'add') {
-            goal.current += value;
-        } else {
-            if(goal.current < value) {
-                alert('Valor de retirada maior que o valor guardado!');
-                return;
+    dashChartObj = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Receitas', 'Despesas'],
+            datasets: [{
+                data: [rec, desp],
+                backgroundColor: [colorRec, colorDesp],
+                borderRadius: 8,
+                barPercentage: 0.5
+            }]
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { display: false }, ticks: { color: colorText } },
+                x: { grid: { display: false }, ticks: { color: colorText } }
             }
-            goal.current -= value;
         }
-        
-        goal.history.push({ id: Date.now(), type, value, date, obs });
-        
-        saveData();
-        closeModal('goalFundModal');
-        e.target.reset();
-        
-        // Reabre detalhe atualizado
-        openGoalDetail(id);
-        showToast('Movimentação registrada!');
-    }
-});
-
-
-/* ==================================================
-   8. MODAIS, BUSCA E SISTEMA
-================================================== */
-const openModal = (modalId, type = null) => {
-    const modal = document.getElementById(modalId);
-    if(modalId === 'transactionModal' && type) {
-        document.getElementById('transType').value = type;
-        document.getElementById('transactionModalTitle').textContent = type === 'receita' ? 'Nova Receita' : 'Nova Despesa';
-        document.getElementById('despesaFields').style.display = type === 'despesa' ? 'block' : 'none';
-        document.getElementById('transDate').value = new Date().toISOString().split('T')[0];
-        populateCategories();
-    }
-    modal.classList.add('active');
-};
-
-const closeModal = (modalId) => {
-    document.getElementById(modalId).classList.remove('active');
-};
-
-const handleSearch = (val) => {
-    const term = val.toLowerCase();
-    // Simples filtro global nas tabelas visíveis
-    document.querySelectorAll('.data-table tbody tr').forEach(tr => {
-        const text = tr.innerText.toLowerCase();
-        tr.style.display = text.includes(term) ? '' : 'none';
-    });
-};
-
-const showToast = (message) => {
-    const toast = document.getElementById('toast');
-    toast.textContent = message;
-    toast.classList.remove('hidden');
-    toast.classList.add('show');
-    setTimeout(() => toast.classList.remove('show'), 3000);
-};
-
-document.getElementById('btnClearData').addEventListener('click', () => {
-    if (confirm("ATENÇÃO: Deseja apagar todos os dados financeiros? Isso não tem volta.")) {
-        localStorage.removeItem(STORAGE_KEY);
-        location.reload();
-    }
-});
-
-/* ==================================================
-   9. ORQUESTRADOR CENTRAL (Regra 31 e 39)
-================================================== */
-const updateUI = () => {
-    calculateCardLimits(); // REGRA 4 e 5 - Sempre atualiza limites baseados nas despesas antes de renderizar
-    renderCards();
-    updateDashboard();
-    renderTransactionsTables();
-    renderGoals();
-};
-
-/* ==================================================
-   10. PWA SERVICE WORKER
-================================================== */
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').then(registration => {
-            console.log('PWA ServiceWorker registrado com sucesso: ', registration.scope);
-        }).catch(err => {
-            console.log('Falha ao registrar PWA ServiceWorker: ', err);
-        });
     });
 }
 
-// Inicialização
-document.addEventListener('DOMContentLoaded', () => {
-    setupNavigation();
-    loadData();
-    updateUI();
-});
+function renderTabelas(tipo) {
+    const dados = transacoes.filter(t => t.tipo === tipo).sort((a,b) => new Date(b.data) - new Date(a.data));
+    const tbody = document.querySelector(`#table-${tipo}s tbody`);
+    if(!tbody) return;
+    tbody.innerHTML = '';
+    
+    dados.forEach(item => {
+        const tr = document.createElement('tr');
+        const dataF = item.data.split('-').reverse().join('/');
+        let html = `<td>${dataF}</td><td>${item.desc}</td><td>${item.cat}</td>`;
+        if(tipo === 'despesa') html += `<td>${item.pagamento}</td>`;
+        html += `<td class="${tipo === 'receita' ? 'text-green' : 'text-red'}">${formatCurrency(item.valor)}</td>
+                 <td><button onclick="excluirTransacao(${item.id})" class="btn-secondary" style="padding: 4px 8px;">🗑️</button></td>`;
+        tr.innerHTML = html;
+        tbody.appendChild(tr);
+    });
+}
+
+// ====== CARTÕES (SALVAR, EDITAR, EXCLUIR, RENDERIZAR) ======
+function salvarCartao(e) {
+    e.preventDefault();
+    const id = document.getElementById('cartao-id').value;
+    const banco = document.getElementById('cartao-banco').value.trim();
+    const nome = document.getElementById('cartao-nome').value.trim();
+    const limite = parseFloat(document.getElementById('cartao-limite').value);
+    const fechamento = parseInt(document.getElementById('cartao-fechamento').value);
+    const vencimento = parseInt(document.getElementById('cartao-vencimento').value);
+    const cor = document.getElementById('cartao-cor').value;
+
+    if (!banco || !nome || isNaN(limite) || isNaN(fechamento) || isNaN(vencimento)) {
+        alert('Por favor, preencha todos os campos do cartão corretamente.');
+        return;
+    }
+
+    if (id) {
+        const index = cartoes.findIndex(c => c.id == id);
+        if (index !== -1) {
+            const oldBanco = cartoes[index].banco;
+            cartoes[index] = { id: parseFloat(id), banco, nome, limite, fechamento, vencimento, cor };
+
+            // Se o nome do Banco mudou, atualizamos as transações vinculadas a esse cartão
+            if (oldBanco !== banco) {
+                transacoes.forEach(t => {
+                    if (t.pagamento === oldBanco) {
+                        t.pagamento = banco;
+                    }
+                });
+                localStorage.setItem('transacoes', JSON.stringify(transacoes));
+            }
+        }
+    } else {
+        cartoes.push({ id: Date.now(), banco, nome, limite, fechamento, vencimento, cor });
+    }
+
+    localStorage.setItem('cartoes', JSON.stringify(cartoes));
+    closeModal('modal-cartao');
+    renderAll();
+}
+
+function editarCartao(id) {
+    const cartao = cartoes.find(c => c.id === id);
+    if (!cartao) return;
+
+    document.getElementById('cartao-id').value = cartao.id;
+    document.getElementById('cartao-banco').value = cartao.banco;
+    document.getElementById('cartao-nome').value = cartao.nome;
+    document.getElementById('cartao-limite').value = cartao.limite;
+    document.getElementById('cartao-fechamento').value = cartao.fechamento;
+    document.getElementById('cartao-vencimento').value = cartao.vencimento;
+    document.getElementById('cartao-cor').value = cartao.cor || '#4318FF';
+
+    document.getElementById('titulo-modal-cartao').innerText = "Editar Cartão";
+    openModal('modal-cartao');
+}
+
+function excluirCartao(id) {
+    if(confirm("Deseja realmente excluir este cartão?")) {
+        cartoes = cartoes.filter(c => c.id !== id);
+        localStorage.setItem('cartoes', JSON.stringify(cartoes));
+        renderAll();
+    }
+}
+
+function renderCartoes() {
+    const container = document.getElementById('cards-container');
+    container.innerHTML = '';
+    
+    if(cartoes.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-muted);">Nenhum cartão cadastrado.</p>';
+        return;
+    }
+
+    cartoes.forEach(cartao => {
+        const div = document.createElement('div');
+        div.className = 'credit-card';
+        div.style.background = cartao.cor;
+        div.style.color = '#fff';
+        div.style.padding = '25px';
+        div.style.borderRadius = '16px';
+        div.style.position = 'relative';
+        
+        const fatura = transacoes.filter(t => t.tipo === 'despesa' && t.pagamento === cartao.banco).reduce((a, t) => a + t.valor, 0);
+        
+        div.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px;">
+                <span style="font-weight:700; letter-spacing:1px;">${cartao.banco.toUpperCase()}</span>
+                <div>
+                    <button onclick="editarCartao(${cartao.id})" style="background:none; border:none; color:#fff; cursor:pointer; font-size:16px; margin-right:8px;" title="Editar Cartão">✏️</button>
+                    <button onclick="excluirCartao(${cartao.id})" style="background:none; border:none; color:#fff; cursor:pointer; font-size:16px;" title="Excluir Cartão">🗑️</button>
+                </div>
+            </div>
+            <div style="font-size:22px; font-weight:500; margin-bottom: 20px;">${cartao.nome}</div>
+            <div style="display:flex; justify-content:space-between; font-size: 13px; background: rgba(0,0,0,0.2); padding: 12px; border-radius: 8px;">
+                <div><span>Limite Total</span><br><strong>${formatCurrency(cartao.limite)}</strong></div>
+                <div><span style="color:#FFA726;">Fatura Atual</span><br><strong>${formatCurrency(fatura)}</strong></div>
+            </div>
+        `;
+        container.appendChild(div);
+    });
+}
+
+// ====== METAS / COFRINHOS (CRIAR, EDITAR, DEPOSITAR, RETIRAR, EXCLUIR) ======
+function salvarMeta(e) {
+    e.preventDefault();
+    const id = document.getElementById('meta-id').value;
+    const icone = document.getElementById('meta-icone').value;
+    const nome = document.getElementById('meta-nome').value;
+    const desc = document.getElementById('meta-desc').value;
+    const alvo = parseFloat(document.getElementById('meta-alvo').value);
+    const guardado = parseFloat(document.getElementById('meta-guardado').value);
+    const prazo = document.getElementById('meta-prazo').value;
+
+    if (isNaN(alvo) || alvo <= 0 || isNaN(guardado) || guardado < 0) {
+        alert('Por favor, informe valores numéricos válidos.');
+        return;
+    }
+
+    if(id) {
+        const index = metas.findIndex(m => m.id == id);
+        if (index !== -1) {
+            metas[index] = { id: parseFloat(id), icone, nome, desc, alvo, guardado, prazo };
+        }
+    } else {
+        metas.push({ id: Date.now(), icone, nome, desc, alvo, guardado, prazo });
+    }
+
+    localStorage.setItem('metas', JSON.stringify(metas));
+    closeModal('modal-meta');
+    renderAll();
+}
+
+function editarMeta(id) {
+    const m = metas.find(x => x.id === id);
+    if (!m) return;
+    document.getElementById('meta-id').value = m.id;
+    document.getElementById('meta-icone').value = m.icone;
+    document.getElementById('meta-nome').value = m.nome;
+    document.getElementById('meta-desc').value = m.desc;
+    document.getElementById('meta-alvo').value = m.alvo;
+    document.getElementById('meta-guardado').value = m.guardado;
+    document.getElementById('meta-prazo').value = m.prazo;
+    document.getElementById('titulo-modal-meta').innerText = "Editar Cofrinho";
+    openModal('modal-meta');
+}
+
+function openModalMovMeta(id, tipo) {
+    const meta = metas.find(m => m.id === id);
+    if (!meta) return;
+
+    document.getElementById('mov-meta-id').value = meta.id;
+    document.getElementById('mov-meta-tipo').value = tipo;
+    document.getElementById('mov-meta-valor').value = '';
+
+    const infoDiv = document.getElementById('info-mov-meta');
+    infoDiv.innerHTML = `<strong>${meta.icone} ${meta.nome}</strong><br><span style="color: var(--text-muted); font-size: 13px;">Saldo Atual: <strong>${formatCurrency(meta.guardado)}</strong></span>`;
+
+    const btnSubmit = document.getElementById('btn-submit-mov-meta');
+
+    if (tipo === 'depositar') {
+        document.getElementById('titulo-modal-mov-meta').innerText = 'Depositar no Cofrinho';
+        document.getElementById('label-mov-valor').innerText = 'Valor a depositar (R$):';
+        btnSubmit.innerText = 'Confirmar Depósito';
+        btnSubmit.style.backgroundColor = 'var(--green)';
+    } else {
+        document.getElementById('titulo-modal-mov-meta').innerText = 'Retirar do Cofrinho';
+        document.getElementById('label-mov-valor').innerText = 'Valor a retirar (R$):';
+        btnSubmit.innerText = 'Confirmar Retirada';
+        btnSubmit.style.backgroundColor = 'var(--red)';
+    }
+
+    openModal('modal-mov-meta');
+}
+
+function executarMovimentacaoMeta(e) {
+    e.preventDefault();
+    const id = parseFloat(document.getElementById('mov-meta-id').value);
+    const tipo = document.getElementById('mov-meta-tipo').value;
+    const valor = parseFloat(document.getElementById('mov-meta-valor').value);
+
+    if (isNaN(valor) || valor <= 0) {
+        alert('Por favor, informe um valor válido maior que zero.');
+        return;
+    }
+
+    const index = metas.findIndex(m => m.id === id);
+    if (index === -1) return;
+
+    if (tipo === 'depositar') {
+        metas[index].guardado += valor;
+    } else if (tipo === 'retirar') {
+        if (valor > metas[index].guardado) {
+            alert(`Valor de retirada superior ao saldo disponível! Saldo disponível no cofrinho: ${formatCurrency(metas[index].guardado)}`);
+            return;
+        }
+        metas[index].guardado -= valor;
+    }
+
+    localStorage.setItem('metas', JSON.stringify(metas));
+    closeModal('modal-mov-meta');
+    renderAll();
+}
+
+function excluirMeta(id) {
+    if(confirm("Deseja realmente excluir este cofrinho?")) {
+        metas = metas.filter(m => m.id !== id);
+        localStorage.setItem('metas', JSON.stringify(metas));
+        renderAll();
+    }
+}
+
+function renderMetas() {
+    const container = document.getElementById('metas-container');
+    container.innerHTML = '';
+    
+    if(metas.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-muted);">Nenhum cofrinho criado. Comece a poupar agora!</p>';
+        return;
+    }
+
+    metas.forEach(meta => {
+        const p = meta.alvo > 0 ? (meta.guardado / meta.alvo) * 100 : 0;
+        const perc = p > 100 ? 100 : p;
+        const falta = meta.alvo - meta.guardado;
+
+        let prazoFormatado = meta.prazo;
+        if (meta.prazo && meta.prazo.includes('-')) {
+            const [ano, mes] = meta.prazo.split('-');
+            const meses = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+            if (mes && parseInt(mes) >= 1 && parseInt(mes) <= 12) {
+                prazoFormatado = `${meses[parseInt(mes)-1]}/${ano}`;
+            }
+        }
+
+        container.innerHTML += `
+            <div class="meta-card">
+                ${perc >= 100 ? `<div class="meta-badge" style="color:var(--green); background:rgba(5,205,153,0.1); border-color:var(--green);">CONCLUÍDO!</div>` : `<div class="meta-badge">EM ANDAMENTO</div>`}
+                <div class="meta-header">
+                    <div class="meta-icon">${meta.icone}</div>
+                    <div class="meta-title">
+                        <h3>${meta.nome}</h3>
+                        <span>${meta.desc}</span>
+                    </div>
+                </div>
+                <div class="meta-valores">
+                    <strong>${formatCurrency(meta.guardado)}</strong> guardados de ${formatCurrency(meta.alvo)}
+                </div>
+                <div class="meta-progress-bg">
+                    <div class="meta-progress-fill" style="width: ${perc}%"></div>
+                </div>
+                <div class="meta-footer">
+                    <span>${perc.toFixed(1)}% concluído</span>
+                    <span>${falta > 0 ? `Faltam ${formatCurrency(falta)}` : 'Meta alcançada!'}</span>
+                </div>
+                <div class="meta-actions-row">
+                    <button class="btn-deposito" onclick="openModalMovMeta(${meta.id}, 'depositar')">+ Depositar</button>
+                    <button class="btn-retirada" onclick="openModalMovMeta(${meta.id}, 'retirar')">- Retirar</button>
+                </div>
+                <div class="meta-footer" style="border-top:none; padding-top: 5px;">
+                    <span>Prazo: ${prazoFormatado}</span>
+                    <div>
+                        <button class="btn-link" onclick="editarMeta(${meta.id})">Editar</button> | 
+                        <button class="btn-link" style="color:var(--red);" onclick="excluirMeta(${meta.id})">Excluir</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+}
+
+// ====== CONFIGURAÇÕES ======
+function limparTodosDados() {
+    if(confirm("⚠️ AVISO: Isso vai apagar todas as suas transações, cartões e metas para sempre! Tem certeza absoluta?")) {
+        localStorage.clear();
+        alert("Sistema formatado com sucesso.");
+        window.location.reload();
+    }
+}

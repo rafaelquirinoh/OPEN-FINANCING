@@ -4,482 +4,308 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>OPEN FINANCING</title>
-    
-    <!-- PWA -->
-    <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#000000">
-    <link rel="apple-touch-icon" href="icon-192.png">
-
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="style.css">
-    <script src="script.js" defer></script>
 </head>
 <body>
-    <div class="app-container">
-        <!-- Sidebar Navigation -->
-        <aside class="sidebar" id="sidebar">
-            <div class="sidebar-header">
-                <div class="brand-logo">
-                    <!-- SVG Logo Moderna -->
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <rect x="3" y="6" width="18" height="12" rx="2" />
-                        <path d="M7 14l3-3 2 2 5-5" />
-                        <circle cx="17" cy="9" r="1" fill="currentColor"/>
-                    </svg>
-                    <h2>OPEN FINANCING</h2>
+
+    <!-- SIDEBAR -->
+    <nav class="sidebar">
+        <div class="logo">
+            <span class="logo-icon">📈</span>
+            <h2>OPEN FINANCING</h2>
+        </div>
+        <ul id="menu-list">
+            <li><a href="#" class="active" onclick="showSection('dashboard', this)"><span>📊</span> Dashboard</a></li>
+            <li><a href="#" onclick="showSection('receitas', this)"><span>🟢</span> Receitas</a></li>
+            <li><a href="#" onclick="showSection('despesas', this)"><span>🔴</span> Despesas</a></li>
+            <li><a href="#" onclick="showSection('cartoes', this)"><span>💳</span> Cartões</a></li>
+            <li><a href="#" onclick="showSection('metas', this)"><span>🎯</span> Metas (Cofrinhos)</a></li>
+            <li><a href="#" onclick="showSection('configuracoes', this)"><span>⚙️</span> Configurações</a></li>
+        </ul>
+    </nav>
+
+    <!-- CONTEÚDO PRINCIPAL -->
+    <main class="content">
+        <header class="top-bar">
+            <h1 id="page-title">Dashboard</h1>
+            <div class="top-bar-right">
+                <div class="search-box">
+                    <span>🔍</span>
+                    <input type="text" placeholder="Pesquisar...">
                 </div>
-                <button class="close-menu-btn" id="closeMenuBtn">✖</button>
+                <button class="theme-toggle" onclick="toggleTheme()" id="btn-theme">🌙</button>
             </div>
-            <nav class="sidebar-nav">
-                <button class="nav-item active" data-target="dashboard">
-                    <span>📊</span> Dashboard
-                </button>
-                <button class="nav-item" data-target="receitas">
-                    <span class="text-green">🟢</span> Receitas
-                </button>
-                <button class="nav-item" data-target="despesas">
-                    <span class="text-red">🔴</span> Despesas
-                </button>
-                <button class="nav-item" data-target="cartoes">
-                    <span class="text-blue">💳</span> Cartões
-                </button>
-                <button class="nav-item" data-target="metas">
-                    <span class="text-purple">🎯</span> Metas (Cofrinhos)
-                </button>
-                <button class="nav-item" data-target="configuracoes">
-                    <span>⚙️</span> Configurações
-                </button>
-            </nav>
-        </aside>
+        </header>
 
-        <!-- Main Content -->
-        <main class="main-content">
-            <header class="topbar">
-                <div class="topbar-left">
-                    <button class="menu-toggle" id="menuToggle">☰</button>
-                    <h1 id="pageTitle">Dashboard</h1>
+        <!-- SESSÃO: DASHBOARD -->
+        <section id="dashboard" class="page-section active">
+            <div class="section-header">
+                <h2>Resumo Financeiro</h2>
+                <div class="dash-filters">
+                    <input type="date" id="dash-filtro-data" title="Filtrar por Dia">
+                    <select id="dash-filtro-mes">
+                        <option value="">Mês (Todos)</option>
+                        <option value="01">Janeiro</option><option value="02">Fevereiro</option><option value="03">Março</option>
+                        <option value="04">Abril</option><option value="05">Maio</option><option value="06">Junho</option>
+                        <option value="07">Julho</option><option value="08">Agosto</option><option value="09">Setembro</option>
+                        <option value="10">Outubro</option><option value="11">Novembro</option><option value="12">Dezembro</option>
+                    </select>
+                    <select id="dash-filtro-ano"><option value="">Ano (Todos)</option></select>
+                    <button class="btn-primary" onclick="renderDashboard()">Filtrar</button>
+                    <button class="btn-secondary" onclick="limparFiltroDash()">Limpar</button>
                 </div>
-                <div class="topbar-right">
-                    <div class="search-bar">
-                        <input type="text" id="globalSearch" placeholder="Pesquisar..." oninput="handleSearch(this.value)">
-                        <span>🔍</span>
-                    </div>
-                    <button class="theme-toggle" id="themeToggle" title="Alternar Tema">🌙</button>
-                </div>
-            </header>
-
-            <div class="views-container">
-                <!-- VIEW: DASHBOARD -->
-                <section id="dashboard" class="view active">
-                    <div class="dashboard-header">
-                        <h2>Resumo Financeiro</h2>
-                        <select id="periodFilter" onchange="updateUI()">
-                            <option value="month">Este Mês</option>
-                            <option value="year">Este Ano</option>
-                            <option value="all" selected>Todo o Período</option>
-                        </select>
-                    </div>
-                    
-                    <div class="cards-grid">
-                        <div class="summary-card">
-                            <div class="card-icon bg-green">↓</div>
-                            <div>
-                                <h3>Receitas</h3>
-                                <p class="value text-green" id="dashReceitas">R$ 0,00</p>
-                            </div>
-                        </div>
-                        <div class="summary-card">
-                            <div class="card-icon bg-red">↑</div>
-                            <div>
-                                <h3>Despesas</h3>
-                                <p class="value text-red" id="dashDespesas">R$ 0,00</p>
-                            </div>
-                        </div>
-                        <div class="summary-card highlight">
-                            <div class="card-icon">💰</div>
-                            <div>
-                                <h3>Saldo Total</h3>
-                                <p class="value" id="dashSaldo">R$ 0,00</p>
-                            </div>
-                        </div>
-                        <div class="summary-card">
-                            <div class="card-icon bg-purple">🎯</div>
-                            <div>
-                                <h3>Economia (Metas)</h3>
-                                <p class="value text-purple" id="dashEconomia">R$ 0,00</p>
-                            </div>
-                        </div>
-                        <div class="summary-card">
-                            <div class="card-icon bg-blue">💳</div>
-                            <div>
-                                <h3>Faturas Abertas</h3>
-                                <p class="value text-blue" id="dashCartoes">R$ 0,00</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="charts-grid">
-                        <!-- Gráfico 1: Receitas x Despesas -->
-                        <div class="chart-container">
-                            <h3>Receitas x Despesas</h3>
-                            <div class="bar-chart-vertical">
-                                <div class="bar-group">
-                                    <div class="bar-bg">
-                                        <div class="bar-fill bg-green" id="chartRecFill" style="height: 0%"></div>
-                                    </div>
-                                    <span>Receitas</span>
-                                </div>
-                                <div class="bar-group">
-                                    <div class="bar-bg">
-                                        <div class="bar-fill bg-red" id="chartDespFill" style="height: 0%"></div>
-                                    </div>
-                                    <span>Despesas</span>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Gráfico 2: Gastos por Categoria -->
-                        <div class="chart-container">
-                            <h3>Maiores Gastos (Top 4)</h3>
-                            <div class="horizontal-bars" id="categoryChart">
-                                <!-- Preenchido via JS -->
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="charts-grid" style="margin-top: 20px;">
-                        <div class="chart-container">
-                            <h3>Insights Financeiros</h3>
-                            <div class="insights-list" id="insightsList">
-                                <!-- Preenchido via JS -->
-                            </div>
-                        </div>
-                        <div class="chart-container">
-                            <h3>Últimas Movimentações</h3>
-                            <div class="recent-transactions" id="recentTransactions">
-                                <!-- Preenchido via JS -->
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- VIEW: RECEITAS -->
-                <section id="receitas" class="view">
-                    <div class="view-header">
-                        <h2>Receitas</h2>
-                        <button class="btn-primary" onclick="openModal('transactionModal', 'receita')">+ Nova Receita</button>
-                    </div>
-                    <div class="table-container">
-                        <table class="data-table" id="receitasTable">
-                            <thead>
-                                <tr>
-                                    <th>Data</th>
-                                    <th>Descrição</th>
-                                    <th>Categoria</th>
-                                    <th>Valor</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </section>
-
-                <!-- VIEW: DESPESAS -->
-                <section id="despesas" class="view">
-                    <div class="view-header">
-                        <h2>Despesas</h2>
-                        <button class="btn-danger" onclick="openModal('transactionModal', 'despesa')">+ Nova Despesa</button>
-                    </div>
-                    <div class="table-container">
-                        <table class="data-table" id="despesasTable">
-                            <thead>
-                                <tr>
-                                    <th>Data</th>
-                                    <th>Descrição</th>
-                                    <th>Categoria</th>
-                                    <th>Pagamento</th>
-                                    <th>Valor</th>
-                                    <th>Ações</th>
-                                </tr>
-                            </thead>
-                            <tbody></tbody>
-                        </table>
-                    </div>
-                </section>
-
-                <!-- VIEW: METAS (COFRINHOS) -->
-                <section id="metas" class="view">
-                    <div class="view-header">
-                        <h2>Meus Cofrinhos (Metas)</h2>
-                        <button class="btn-primary" onclick="openModal('goalModal')">+ Novo Cofrinho</button>
-                    </div>
-                    <div class="goals-grid" id="goalsGrid">
-                        <!-- Preenchido via JS -->
-                    </div>
-                </section>
-
-                <!-- VIEW: CARTÕES -->
-                <section id="cartoes" class="view">
-                    <div class="view-header">
-                        <h2>Cartões de Crédito</h2>
-                        <button class="btn-primary" onclick="openModal('cardModal')">+ Adicionar Novo Cartão</button>
-                    </div>
-                    <div class="cards-list" id="cardsGrid">
-                         <!-- Preenchido via JS -->
-                    </div>
-                </section>
-
-                <!-- VIEW: CONFIGURAÇÕES -->
-                <section id="configuracoes" class="view">
-                    <h2>Configurações do Sistema</h2>
-                    <div class="settings-card">
-                        <h3>Zona de Perigo</h3>
-                        <p>Esta ação apagará todos os dados armazenados localmente e reiniciará o sistema. Suas finanças serão zeradas.</p>
-                        <button class="btn-danger" id="btnClearData">Limpar todos os dados</button>
-                    </div>
-                </section>
             </div>
-        </main>
-    </div>
 
-    <!-- MODAIS -->
+            <div class="cards-grid">
+                <div class="summary-card">
+                    <div class="card-icon-wrap green-wrap"><span class="card-icon green">↓</span></div>
+                    <div>
+                        <h3>Receitas</h3>
+                        <h2 id="dash-receitas" class="text-green">R$ 0,00</h2>
+                    </div>
+                </div>
+                <div class="summary-card">
+                    <div class="card-icon-wrap red-wrap"><span class="card-icon red">↑</span></div>
+                    <div>
+                        <h3>Despesas</h3>
+                        <h2 id="dash-despesas" class="text-red">R$ 0,00</h2>
+                    </div>
+                </div>
+                <div class="summary-card destaque">
+                    <div class="card-icon-wrap blue-light-wrap"><span class="card-icon blue">💰</span></div>
+                    <div>
+                        <h3 class="text-white">Saldo Total</h3>
+                        <h2 id="dash-saldo" class="text-white">R$ 0,00</h2>
+                    </div>
+                </div>
+                <div class="summary-card">
+                    <div class="card-icon-wrap purple-wrap"><span class="card-icon purple">🎯</span></div>
+                    <div>
+                        <h3>Economia (Metas)</h3>
+                        <h2 id="dash-economia" class="text-purple">R$ 0,00</h2>
+                    </div>
+                </div>
+                <div class="summary-card">
+                    <div class="card-icon-wrap blue-wrap"><span class="card-icon blue-dark">💳</span></div>
+                    <div>
+                        <h3>Faturas Abertas</h3>
+                        <h2 id="dash-faturas" class="text-blue">R$ 0,00</h2>
+                    </div>
+                </div>
+            </div>
 
-    <!-- Modal de Transação (Receita/Despesa) -->
-    <div class="modal-overlay" id="transactionModal">
+            <div class="dash-grid-bottom">
+                <div class="dash-box box-chart">
+                    <h3>Receitas x Despesas</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="dashBarChart"></canvas>
+                    </div>
+                </div>
+                <div class="dash-box box-list">
+                    <h3>Maiores Gastos (Top 4)</h3>
+                    <div id="lista-top-gastos" class="custom-list">Sem gastos no período.</div>
+                </div>
+                <div class="dash-box box-insights">
+                    <h3>Insights Financeiros</h3>
+                    <div class="insight-alert" id="insight-text">
+                        Continue registrando suas movimentações para gerar insights.
+                    </div>
+                </div>
+                <div class="dash-box box-list">
+                    <h3>Últimas Movimentações</h3>
+                    <div id="lista-ultimas-mov" class="custom-list">Nenhuma movimentação.</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SESSÃO: RECEITAS -->
+        <section id="receitas" class="page-section">
+            <button class="btn-primary" style="margin-bottom: 20px;" onclick="openModalTransacao('receita')">+ Nova Receita</button>
+            <div class="split-layout">
+                <div class="table-container">
+                    <table id="table-receitas">
+                        <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th>Ações</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- SESSÃO: DESPESAS -->
+        <section id="despesas" class="page-section">
+            <button class="btn-primary text-red-bg" style="margin-bottom: 20px;" onclick="openModalTransacao('despesa')">+ Nova Despesa</button>
+            <div class="split-layout">
+                <div class="table-container">
+                    <table id="table-despesas">
+                        <thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Pagamento</th><th>Valor</th><th>Ações</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- SESSÃO: CARTÕES -->
+        <section id="cartoes" class="page-section">
+            <div class="header-actions">
+                <button class="btn-primary" onclick="openModalCartao()">+ Adicionar Cartão</button>
+            </div>
+            <div class="credit-cards-grid" id="cards-container" style="margin-top: 20px;"></div>
+        </section>
+
+        <!-- SESSÃO: METAS (COFRINHOS) -->
+        <section id="metas" class="page-section">
+            <div class="section-header">
+                <h2>Meus Cofrinhos (Metas)</h2>
+                <button class="btn-primary" onclick="openModalMeta()">+ Novo Cofrinho</button>
+            </div>
+            <div id="metas-container" class="metas-grid"></div>
+        </section>
+
+        <!-- SESSÃO: CONFIGURAÇÕES -->
+        <section id="configuracoes" class="page-section">
+            <div class="config-box">
+                <h2>Configurações do Sistema</h2>
+                <div class="danger-zone">
+                    <h3>Zona de Perigo</h3>
+                    <p>Esta ação apagará todos os dados armazenados localmente e reiniciará o sistema. Suas finanças serão zeradas e não poderão ser recuperadas.</p>
+                    <button class="btn-danger" onclick="limparTodosDados()">Limpar todos os dados</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ================= MODAIS ================= -->
+    
+    <!-- MODAL TRANSAÇÃO -->
+    <div id="modal-transacao" class="modal">
         <div class="modal-content">
-            <h2 id="transactionModalTitle">Nova Transação</h2>
-            <form id="transactionForm">
-                <input type="hidden" id="transId">
-                <input type="hidden" id="transType">
-                
-                <div class="form-group">
-                    <label>Descrição</label>
-                    <input type="text" id="transDesc" required placeholder="Ex: Mercado, Salário...">
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Valor (R$)</label>
-                        <input type="number" id="transValue" step="0.01" min="0.01" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Data</label>
-                        <input type="date" id="transDate" required>
-                    </div>
-                </div>
+            <div class="modal-header">
+                <h2 id="titulo-modal-transacao">Nova Transação</h2>
+                <button class="close-btn" onclick="closeModal('modal-transacao')">✕</button>
+            </div>
+            <form id="form-transacao" onsubmit="salvarTransacao(event)">
+                <input type="hidden" id="transacao-id">
+                <input type="hidden" id="transacao-tipo">
 
-                <div class="form-group">
-                    <label>Categoria</label>
-                    <select id="transCategory" required>
-                        <!-- Preenchido dinamicamente no JS -->
+                <label>Descrição:</label>
+                <input type="text" id="transacao-desc" required>
+
+                <label>Valor (R$):</label>
+                <input type="number" step="0.01" id="transacao-valor" required>
+
+                <label>Categoria:</label>
+                <select id="transacao-cat" required></select>
+
+                <div id="div-pagamento" style="display: none;">
+                    <label>Forma de Pagamento / Cartão:</label>
+                    <select id="transacao-pagamento">
+                        <option value="Dinheiro/Pix">Dinheiro / Pix</option>
                     </select>
                 </div>
 
-                <!-- Específico para Despesas -->
-                <div id="despesaFields" style="display: none;">
-                    <div class="form-group">
-                        <label>Forma de Pagamento</label>
-                        <select id="transPayment" onchange="toggleCardSelect()">
-                            <option value="dinheiro">Conta / Dinheiro (Débito direto)</option>
-                            <option value="cartao">Cartão de Crédito</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group" id="cardSelectGroup" style="display: none;">
-                        <label>Selecione o Cartão</label>
-                        <select id="transCard">
-                            <!-- Preenchido via JS -->
-                        </select>
-                    </div>
-                    
-                    <div class="form-group" id="installmentsGroup" style="display: none;">
-                        <label>Parcelamento</label>
-                        <select id="transInstallments">
-                            <option value="1">À vista (1x)</option>
-                            <option value="2">2x</option>
-                            <option value="3">3x</option>
-                            <option value="4">4x</option>
-                            <option value="5">5x</option>
-                            <option value="6">6x</option>
-                            <option value="10">10x</option>
-                            <option value="12">12x</option>
-                        </select>
-                    </div>
-                </div>
+                <label>Data:</label>
+                <input type="date" id="transacao-data" required>
 
                 <div class="modal-actions">
-                    <button type="button" class="btn-secondary" onclick="closeModal('transactionModal')">Cancelar</button>
-                    <button type="submit" class="btn-primary">Salvar</button>
+                    <button type="submit" class="btn-primary w-full">Salvar</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal de Cartão -->
-    <div class="modal-overlay" id="cardModal">
+    <!-- MODAL CARTÃO -->
+    <div id="modal-cartao" class="modal">
         <div class="modal-content">
-            <h2>Cadastrar Cartão de Crédito</h2>
-            <form id="cardForm">
-                <input type="hidden" id="cardId">
-                <div class="form-group">
-                    <label>Nome do Cartão</label>
-                    <input type="text" id="cardName" required placeholder="Ex: Nubank, Inter, Itaú">
-                </div>
-                <div class="form-group">
-                    <label>Banco Instituição</label>
-                    <input type="text" id="cardBank" required placeholder="Ex: Nubank">
-                </div>
-                <div class="form-group">
-                    <label>Limite Total (R$)</label>
-                    <input type="number" id="cardLimit" step="0.01" min="1" required>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Dia de Fechamento</label>
-                        <input type="number" id="cardClose" min="1" max="31" required>
+            <div class="modal-header">
+                <h2 id="titulo-modal-cartao">Novo Cartão</h2>
+                <button class="close-btn" onclick="closeModal('modal-cartao')">✕</button>
+            </div>
+            <form id="form-cartao" onsubmit="salvarCartao(event)">
+                <input type="hidden" id="cartao-id">
+                <label>Banco (Ex: Nubank):</label>
+                <input type="text" id="cartao-banco" required>
+                
+                <label>Nome no Cartão:</label>
+                <input type="text" id="cartao-nome" required>
+                
+                <label>Limite (R$):</label>
+                <input type="number" step="0.01" id="cartao-limite" required>
+                
+                <div style="display:flex;gap:10px;">
+                    <div style="flex:1">
+                        <label>Fechamento (Dia):</label>
+                        <input type="number" id="cartao-fechamento" min="1" max="31" required>
                     </div>
-                    <div class="form-group">
-                        <label>Dia de Vencimento</label>
-                        <input type="number" id="cardDue" min="1" max="31" required>
+                    <div style="flex:1">
+                        <label>Vencimento (Dia):</label>
+                        <input type="number" id="cartao-vencimento" min="1" max="31" required>
                     </div>
                 </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn-secondary" onclick="closeModal('cardModal')">Cancelar</button>
-                    <button type="submit" class="btn-primary">Salvar Cartão</button>
+                
+                <label>Cor do Cartão:</label>
+                <input type="color" id="cartao-cor" value="#4318FF" style="height: 40px; cursor: pointer;">
+                
+                <div class="modal-actions" style="margin-top: 15px;">
+                    <button type="submit" class="btn-primary w-full">Salvar Cartão</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal de Meta -->
-    <div class="modal-overlay" id="goalModal">
+    <!-- MODAL META (COFRINHO) -->
+    <div id="modal-meta" class="modal">
         <div class="modal-content">
-            <h2 id="goalModalTitle">Novo Cofrinho</h2>
-            <form id="goalForm">
-                <input type="hidden" id="goalId">
-                <div class="form-group">
-                    <label>Tipo / Ícone</label>
-                    <select id="goalType" required>
-                        <option value="🏠 Casa">🏠 Casa</option>
-                        <option value="🚗 Carro">🚗 Carro</option>
-                        <option value="🏍️ Moto">🏍️ Moto</option>
-                        <option value="✈️ Viagem">✈️ Viagem</option>
-                        <option value="💻 Computador">💻 Computador</option>
-                        <option value="📱 Celular">📱 Celular</option>
-                        <option value="🎓 Educação">🎓 Educação</option>
-                        <option value="🛡️ Emergência">🛡️ Reserva de Emergência</option>
-                        <option value="💰 Investimentos">💰 Investimentos</option>
-                        <option value="⭐ Personalizado">⭐ Personalizado</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Nome do Objetivo</label>
-                    <input type="text" id="goalName" required placeholder="Ex: Viagem final de ano">
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Alvo Financeiro (R$)</label>
-                        <input type="number" id="goalTarget" step="0.01" min="1" required>
-                    </div>
-                    <div class="form-group">
-                        <label>Prazo</label>
-                        <input type="month" id="goalDeadline" required>
-                    </div>
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn-secondary" onclick="closeModal('goalModal')">Cancelar</button>
-                    <button type="submit" class="btn-primary">Criar Cofrinho</button>
+            <div class="modal-header">
+                <h2 id="titulo-modal-meta">Novo Cofrinho</h2>
+                <button class="close-btn" onclick="closeModal('modal-meta')">✕</button>
+            </div>
+            <form id="form-meta" onsubmit="salvarMeta(event)">
+                <input type="hidden" id="meta-id">
+                <label>Ícone (Emoji):</label>
+                <input type="text" id="meta-icone" value="🏠" maxlength="2" required>
+                <label>Título (Ex: Viagem):</label>
+                <input type="text" id="meta-nome" required>
+                <label>Descrição Curta:</label>
+                <input type="text" id="meta-desc" required>
+                <label>Objetivo Total (R$):</label>
+                <input type="number" step="0.01" id="meta-alvo" required>
+                <label>Já Guardado (R$):</label>
+                <input type="number" step="0.01" id="meta-guardado" value="0" required>
+                <label>Prazo (Data limite):</label>
+                <input type="month" id="meta-prazo" required>
+                <div class="modal-actions" style="margin-top: 15px;">
+                    <button type="submit" class="btn-primary w-full">Salvar Meta</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal Adicionar/Retirar Dinheiro Meta -->
-    <div class="modal-overlay" id="goalFundModal">
+    <!-- MODAL MOVIMENTAÇÃO COFRINHO (DEPOSITAR/RETIRAR) -->
+    <div id="modal-mov-meta" class="modal">
         <div class="modal-content">
-            <h2 id="fundModalTitle">Movimentar Cofrinho</h2>
-            <form id="goalFundForm">
-                <input type="hidden" id="fundGoalId">
-                <input type="hidden" id="fundActionType">
-                <div class="form-group">
-                    <label>Valor (R$)</label>
-                    <input type="number" id="fundValue" step="0.01" min="0.01" required>
+            <div class="modal-header">
+                <h2 id="titulo-modal-mov-meta">Depositar no Cofrinho</h2>
+                <button class="close-btn" onclick="closeModal('modal-mov-meta')">✕</button>
+            </div>
+            <form id="form-mov-meta" onsubmit="executarMovimentacaoMeta(event)">
+                <input type="hidden" id="mov-meta-id">
+                <input type="hidden" id="mov-meta-tipo">
+
+                <div id="info-mov-meta" style="margin-bottom: 15px; background: var(--bg-body); padding: 12px; border-radius: 8px; font-size: 14px;">
                 </div>
-                <div class="form-group">
-                    <label>Data</label>
-                    <input type="date" id="fundDate" required>
-                </div>
-                <div class="form-group">
-                    <label>Observação (Opcional)</label>
-                    <input type="text" id="fundObs" placeholder="Ex: Bônus do mês">
-                </div>
-                <div class="modal-actions">
-                    <button type="button" class="btn-secondary" onclick="closeModal('goalFundModal')">Cancelar</button>
-                    <button type="submit" class="btn-primary">Confirmar</button>
+
+                <label id="label-mov-valor">Valor (R$):</label>
+                <input type="number" step="0.01" min="0.01" id="mov-meta-valor" placeholder="0,00" required>
+
+                <div class="modal-actions" style="margin-top: 15px;">
+                    <button type="submit" id="btn-submit-mov-meta" class="btn-primary w-full">Confirmar</button>
                 </div>
             </form>
         </div>
     </div>
 
-    <!-- Modal Detalhes da Meta -->
-    <div class="modal-overlay" id="goalDetailModal">
-        <div class="modal-content detail-modal">
-            <div class="detail-header">
-                <h2 id="detailGoalName">Nome da Meta</h2>
-                <button class="close-btn" onclick="closeModal('goalDetailModal')">✖</button>
-            </div>
-            
-            <div class="detail-body">
-                <div class="detail-stats-grid">
-                    <div class="stat-box">
-                        <small>Status</small>
-                        <strong id="detailGoalStatus">Em andamento</strong>
-                    </div>
-                    <div class="stat-box">
-                        <small>Alvo Final</small>
-                        <strong id="detailGoalTarget" class="text-blue">R$ 0,00</strong>
-                    </div>
-                    <div class="stat-box">
-                        <small>Guardado</small>
-                        <strong id="detailGoalCurrent" class="text-green">R$ 0,00</strong>
-                    </div>
-                    <div class="stat-box">
-                        <small>Faltam</small>
-                        <strong id="detailGoalRemaining" class="text-red">R$ 0,00</strong>
-                    </div>
-                </div>
-
-                <div class="progress-container large-progress" style="margin: 20px 0;">
-                    <div class="progress-bar-bg">
-                        <div class="progress-bar-fill bg-purple" id="detailGoalBar" style="width: 0%"></div>
-                    </div>
-                    <div class="progress-stats">
-                        <span id="detailGoalPerc">0% Concluído</span>
-                        <span id="detailGoalDeadlineInfo">Prazo: -</span>
-                    </div>
-                </div>
-
-                <div class="info-alert" id="detailGoalMonthly">
-                    <!-- Preenchido via JS (Valor necessário por mês) -->
-                </div>
-
-                <h3>Histórico de Movimentações</h3>
-                <div class="history-list" id="detailGoalHistory">
-                    <!-- Preenchido via JS -->
-                </div>
-            </div>
-
-            <div class="modal-actions" style="justify-content: space-between;">
-                <button class="btn-danger" id="btnDeleteGoalBtn">Excluir Cofrinho</button>
-                <div style="display:flex; gap:10px;">
-                    <button class="btn-secondary" id="btnRemoveFundBtn">➖ Retirar</button>
-                    <button class="btn-primary" id="btnAddFundBtn">➕ Guardar</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Toast Notification -->
-    <div id="toast" class="toast hidden"></div>
+    <script src="script.js"></script>
 </body>
 </html>
